@@ -3,9 +3,9 @@
 pragma solidity ^0.8.0;
 pragma experimental ABIEncoderV2;
 
-import "boring-solidity/contracts/libraries/BoringMath.sol";
-import "boring-solidity/contracts/BoringBatchable.sol";
-import "boring-solidity/contracts/BoringOwnable.sol";
+//import "@boringcrypto/boring-solidity/contracts/libraries/BoringMath.sol";
+import "@boringcrypto/boring-solidity/contracts/BoringBatchable.sol";
+import "@boringcrypto/boring-solidity/contracts/BoringOwnable.sol";
 import "./libraries/SignedSafeMath.sol";
 import "./interfaces/IRewarder.sol";
 import "./interfaces/IMasterChef.sol";
@@ -22,8 +22,8 @@ interface IMigratorChef {
 /// that is deposited into the MasterChef V1 (MCV1) contract.
 /// The allocation point for this pool on MCV1 is the total allocation point for all pools that receive double incentives.
 contract MasterChefV2 is BoringOwnable, BoringBatchable {
-    using BoringMath for uint256;
-    using BoringMath128 for uint128;
+    //using BoringMath for uint256;
+    //using BoringMath128 for uint128;
     using BoringERC20 for IERC20;
     using SignedSafeMath for int256;
 
@@ -111,16 +111,16 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
     /// @param _rewarder Address of the rewarder delegate.
     function add(uint256 allocPoint, IERC20 _lpToken, IRewarder _rewarder) public onlyOwner {
         uint256 lastRewardBlock = block.number;
-        totalAllocPoint = totalAllocPoint.add(allocPoint);
+        totalAllocPoint = totalAllocPoint + allocPoint;
         lpToken.push(_lpToken);
         rewarder.push(_rewarder);
 
         poolInfo.push(PoolInfo({
-            allocPoint: allocPoint.to64(),
-            lastRewardBlock: lastRewardBlock.to64(),
+            allocPoint: uint64(allocPoint),//allocPoint.to64(),
+            lastRewardBlock: uint64(lastRewardBlock),//lastRewardBlock.to64(),
             accSushiPerShare: 0
         }));
-        emit LogPoolAddition(lpToken.length.sub(1), allocPoint, _lpToken, _rewarder);
+        emit LogPoolAddition(lpToken.length - 1, allocPoint, _lpToken, _rewarder);
     }
 
     /// @notice Update the given pool's SUSHI allocation point and `IRewarder` contract. Can only be called by the owner.
@@ -129,8 +129,8 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
     /// @param _rewarder Address of the rewarder delegate.
     /// @param overwrite True if _rewarder should be `set`. Otherwise `_rewarder` is ignored.
     function set(uint256 _pid, uint256 _allocPoint, IRewarder _rewarder, bool overwrite) public onlyOwner {
-        totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
-        poolInfo[_pid].allocPoint = _allocPoint.to64();
+        totalAllocPoint = totalAllocPoint - poolInfo[_pid].allocPoint + (_allocPoint);
+        poolInfo[_pid].allocPoint = uint64(_allocPoint);//.to64();
         if (overwrite) { rewarder[_pid] = _rewarder; }
         emit LogSetPool(_pid, _allocPoint, overwrite ? _rewarder : rewarder[_pid], overwrite);
     }
@@ -163,11 +163,11 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
         uint256 accSushiPerShare = pool.accSushiPerShare;
         uint256 lpSupply = lpToken[_pid].balanceOf(address(this));
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
-            uint256 blocks = block.number.sub(pool.lastRewardBlock);
-            uint256 sushiReward = blocks.mul(sushiPerBlock()).mul(pool.allocPoint) / totalAllocPoint;
-            accSushiPerShare = accSushiPerShare.add(sushiReward.mul(ACC_SUSHI_PRECISION) / lpSupply);
+            uint256 blocks = block.number + pool.lastRewardBlock;
+            uint256 sushiReward = blocks* sushiPerBlock()*(pool.allocPoint) / totalAllocPoint;
+            accSushiPerShare = accSushiPerShare+(sushiReward*(ACC_SUSHI_PRECISION) / lpSupply);
         }
-        pending = int256(user.amount.mul(accSushiPerShare) / ACC_SUSHI_PRECISION).sub(user.rewardDebt).toUInt256();
+        pending = int256(uint256(uint(user.amount*(accSushiPerShare) / ACC_SUSHI_PRECISION)-(user.rewardDebt)));
     }
 
     /// @notice Update reward variables for all pools. Be careful of gas spending!
@@ -182,7 +182,7 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
     /// @notice Calculates and returns the `amount` of SUSHI per block.
     function sushiPerBlock() public view returns (uint256 amount) {
         amount = uint256(MASTERCHEF_SUSHI_PER_BLOCK)
-            .mul(MASTER_CHEF.poolInfo(MASTER_PID).allocPoint) / MASTER_CHEF.totalAllocPoint();
+            *(MASTER_CHEF.poolInfo(MASTER_PID).allocPoint) / MASTER_CHEF.totalAllocPoint();
     }
 
     /// @notice Update reward variables of the given pool.
@@ -193,11 +193,11 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
         if (block.number > pool.lastRewardBlock) {
             uint256 lpSupply = lpToken[pid].balanceOf(address(this));
             if (lpSupply > 0) {
-                uint256 blocks = block.number.sub(pool.lastRewardBlock);
-                uint256 sushiReward = blocks.mul(sushiPerBlock()).mul(pool.allocPoint) / totalAllocPoint;
-                pool.accSushiPerShare = pool.accSushiPerShare.add((sushiReward.mul(ACC_SUSHI_PRECISION) / lpSupply).to128());
+                uint256 blocks = block.number-(pool.lastRewardBlock);
+                uint256 sushiReward = blocks*(sushiPerBlock())*(pool.allocPoint) / totalAllocPoint;
+                pool.accSushiPerShare = pool.accSushiPerShare+(uint128((sushiReward*(ACC_SUSHI_PRECISION) / lpSupply)));
             }
-            pool.lastRewardBlock = block.number.to64();
+            pool.lastRewardBlock = uint64(block.number);
             poolInfo[pid] = pool;
             emit LogUpdatePool(pid, pool.lastRewardBlock, lpSupply, pool.accSushiPerShare);
         }
@@ -212,8 +212,8 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
         UserInfo storage user = userInfo[pid][to];
 
         // Effects
-        user.amount = user.amount.add(amount);
-        user.rewardDebt = user.rewardDebt.add(int256(amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
+        user.amount = user.amount+(amount);
+        user.rewardDebt = user.rewardDebt+(int256(amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
 
         // Interactions
         IRewarder _rewarder = rewarder[pid];
@@ -235,8 +235,8 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
         UserInfo storage user = userInfo[pid][msg.sender];
 
         // Effects
-        user.rewardDebt = user.rewardDebt.sub(int256(amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
-        user.amount = user.amount.sub(amount);
+        user.rewardDebt = user.rewardDebt-(int256(amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
+        user.amount = user.amount-(amount);
 
         // Interactions
         IRewarder _rewarder = rewarder[pid];
@@ -255,8 +255,8 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
     function harvest(uint256 pid, address to) public {
         PoolInfo memory pool = updatePool(pid);
         UserInfo storage user = userInfo[pid][msg.sender];
-        int256 accumulatedSushi = int256(user.amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION);
-        uint256 _pendingSushi = accumulatedSushi.sub(user.rewardDebt).toUInt256();
+        int256 accumulatedSushi = int256(user.amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION);
+        uint256 _pendingSushi = uint256(accumulatedSushi-(user.rewardDebt));
 
         // Effects
         user.rewardDebt = accumulatedSushi;
@@ -281,12 +281,12 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
     function withdrawAndHarvest(uint256 pid, uint256 amount, address to) public {
         PoolInfo memory pool = updatePool(pid);
         UserInfo storage user = userInfo[pid][msg.sender];
-        int256 accumulatedSushi = int256(user.amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION);
-        uint256 _pendingSushi = accumulatedSushi.sub(user.rewardDebt).toUInt256();
+        int256 accumulatedSushi = int256(user.amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION);
+        uint256 _pendingSushi = uint256(accumulatedSushi-(user.rewardDebt));
 
         // Effects
-        user.rewardDebt = accumulatedSushi.sub(int256(amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
-        user.amount = user.amount.sub(amount);
+        user.rewardDebt = accumulatedSushi-(int256(amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
+        user.amount = user.amount-(amount);
         
         // Interactions
         SUSHI.safeTransfer(to, _pendingSushi);

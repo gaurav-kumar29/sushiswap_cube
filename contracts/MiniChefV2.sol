@@ -3,9 +3,9 @@
 pragma solidity ^0.8.0;
 pragma experimental ABIEncoderV2;
 
-import "boring-solidity/contracts/libraries/BoringMath.sol";
-import "boring-solidity/contracts/BoringBatchable.sol";
-import "boring-solidity/contracts/BoringOwnable.sol";
+//import "@boringcrypto/boring-solidity/contracts/libraries/BoringMath.sol";
+import "@boringcrypto/boring-solidity/contracts/BoringBatchable.sol";
+import "@boringcrypto/boring-solidity/contracts/BoringOwnable.sol";
 import "./libraries/SignedSafeMath.sol";
 import "./interfaces/IRewarder.sol";
 import "./interfaces/IMasterChef.sol";
@@ -22,8 +22,8 @@ interface IMigratorChef {
 /// that is deposited into the MasterChef V1 (MCV1) contract.
 /// The allocation point for this pool on MCV1 is the total allocation point for all pools that receive double incentives.
 contract MiniChefV2 is BoringOwnable, BoringBatchable {
-    using BoringMath for uint256;
-    using BoringMath128 for uint128;
+    //using BoringMath for uint256;
+    //using BoringMath128 for uint128;
     using BoringERC20 for IERC20;
     using SignedSafeMath for int256;
 
@@ -94,12 +94,12 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
     /// @param _rewarder Address of the rewarder delegate.
     function add(uint256 allocPoint, IERC20 _lpToken, IRewarder _rewarder) public onlyOwner {
         require(addedTokens[address(_lpToken)] == false, "Token already added");
-        totalAllocPoint = totalAllocPoint.add(allocPoint);
+        totalAllocPoint = totalAllocPoint + allocPoint;
         lpToken.push(_lpToken);
         rewarder.push(_rewarder);
 
         poolInfo.push(PoolInfo({
-            allocPoint: allocPoint.to64(),
+            allocPoint: uint64(allocPoint),//allocPoint.to64(),
             lastRewardTime: block.timestamp.to64(),
             accSushiPerShare: 0
         }));
