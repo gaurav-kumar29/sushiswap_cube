@@ -167,7 +167,7 @@ contract MasterChefV2 is BoringOwnable, BoringBatchable {
             uint256 sushiReward = blocks* sushiPerBlock()*(pool.allocPoint) / totalAllocPoint;
             accSushiPerShare = accSushiPerShare+(sushiReward*(ACC_SUSHI_PRECISION) / lpSupply);
         }
-        pending = int256(uint256(uint(user.amount*(accSushiPerShare) / ACC_SUSHI_PRECISION)-(user.rewardDebt)));
+        pending = uint256(uint(user.amount*(accSushiPerShare) / ACC_SUSHI_PRECISION)-(uint(user.rewardDebt)));
     }
 
     /// @notice Update reward variables for all pools. Be careful of gas spending!

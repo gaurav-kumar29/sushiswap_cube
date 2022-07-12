@@ -100,11 +100,11 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
 
         poolInfo.push(PoolInfo({
             allocPoint: uint64(allocPoint),//allocPoint.to64(),
-            lastRewardTime: block.timestamp.to64(),
+            lastRewardTime: uint64(block.timestamp),
             accSushiPerShare: 0
         }));
         addedTokens[address(_lpToken)] = true;
-        emit LogPoolAddition(lpToken.length.sub(1), allocPoint, _lpToken, _rewarder);
+        emit LogPoolAddition(lpToken.length - 1, allocPoint, _lpToken, _rewarder);
     }
 
     /// @notice Update the given pool's SUSHI allocation point and `IRewarder` contract. Can only be called by the owner.
@@ -113,8 +113,8 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
     /// @param _rewarder Address of the rewarder delegate.
     /// @param overwrite True if _rewarder should be `set`. Otherwise `_rewarder` is ignored.
     function set(uint256 _pid, uint256 _allocPoint, IRewarder _rewarder, bool overwrite) public onlyOwner {
-        totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
-        poolInfo[_pid].allocPoint = _allocPoint.to64();
+        totalAllocPoint = totalAllocPoint-(poolInfo[_pid].allocPoint)+(_allocPoint);
+        poolInfo[_pid].allocPoint = uint64(_allocPoint);
         if (overwrite) { rewarder[_pid] = _rewarder; }
         emit LogSetPool(_pid, _allocPoint, overwrite ? _rewarder : rewarder[_pid], overwrite);
     }
@@ -157,11 +157,11 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
         uint256 accSushiPerShare = pool.accSushiPerShare;
         uint256 lpSupply = lpToken[_pid].balanceOf(address(this));
         if (block.timestamp > pool.lastRewardTime && lpSupply != 0) {
-            uint256 time = block.timestamp.sub(pool.lastRewardTime);
-            uint256 sushiReward = time.mul(sushiPerSecond).mul(pool.allocPoint) / totalAllocPoint;
-            accSushiPerShare = accSushiPerShare.add(sushiReward.mul(ACC_SUSHI_PRECISION) / lpSupply);
+            uint256 time = block.timestamp-(pool.lastRewardTime);
+            uint256 sushiReward = time*(sushiPerSecond)*(pool.allocPoint) / totalAllocPoint;
+            accSushiPerShare = accSushiPerShare+(sushiReward*(ACC_SUSHI_PRECISION) / lpSupply);
         }
-        pending = int256(user.amount.mul(accSushiPerShare) / ACC_SUSHI_PRECISION).sub(user.rewardDebt).toUInt256();
+        pending = uint256(uint(user.amount*(accSushiPerShare) / ACC_SUSHI_PRECISION)-(uint(user.rewardDebt)));
     }
 
     /// @notice Update reward variables for all pools. Be careful of gas spending!
@@ -181,11 +181,11 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
         if (block.timestamp > pool.lastRewardTime) {
             uint256 lpSupply = lpToken[pid].balanceOf(address(this));
             if (lpSupply > 0) {
-                uint256 time = block.timestamp.sub(pool.lastRewardTime);
-                uint256 sushiReward = time.mul(sushiPerSecond).mul(pool.allocPoint) / totalAllocPoint;
-                pool.accSushiPerShare = pool.accSushiPerShare.add((sushiReward.mul(ACC_SUSHI_PRECISION) / lpSupply).to128());
+                uint256 time = block.timestamp-(pool.lastRewardTime);
+                uint256 sushiReward = time*(sushiPerSecond)*(pool.allocPoint) / totalAllocPoint;
+                pool.accSushiPerShare = pool.accSushiPerShare+(uint128(sushiReward*(ACC_SUSHI_PRECISION) / lpSupply));
             }
-            pool.lastRewardTime = block.timestamp.to64();
+            pool.lastRewardTime = uint64(block.timestamp);
             poolInfo[pid] = pool;
             emit LogUpdatePool(pid, pool.lastRewardTime, lpSupply, pool.accSushiPerShare);
         }
@@ -200,8 +200,8 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
         UserInfo storage user = userInfo[pid][to];
 
         // Effects
-        user.amount = user.amount.add(amount);
-        user.rewardDebt = user.rewardDebt.add(int256(amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
+        user.amount = user.amount+(amount);
+        user.rewardDebt = user.rewardDebt+(int256(amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
 
         // Interactions
         IRewarder _rewarder = rewarder[pid];
@@ -223,8 +223,8 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
         UserInfo storage user = userInfo[pid][msg.sender];
 
         // Effects
-        user.rewardDebt = user.rewardDebt.sub(int256(amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
-        user.amount = user.amount.sub(amount);
+        user.rewardDebt = user.rewardDebt-(int256(amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
+        user.amount = user.amount-(amount);
 
         // Interactions
         IRewarder _rewarder = rewarder[pid];
@@ -243,8 +243,8 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
     function harvest(uint256 pid, address to) public {
         PoolInfo memory pool = updatePool(pid);
         UserInfo storage user = userInfo[pid][msg.sender];
-        int256 accumulatedSushi = int256(user.amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION);
-        uint256 _pendingSushi = accumulatedSushi.sub(user.rewardDebt).toUInt256();
+        int256 accumulatedSushi = int256(user.amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION);
+        uint256 _pendingSushi = uint256(accumulatedSushi-(user.rewardDebt));
 
         // Effects
         user.rewardDebt = accumulatedSushi;
@@ -269,12 +269,12 @@ contract MiniChefV2 is BoringOwnable, BoringBatchable {
     function withdrawAndHarvest(uint256 pid, uint256 amount, address to) public {
         PoolInfo memory pool = updatePool(pid);
         UserInfo storage user = userInfo[pid][msg.sender];
-        int256 accumulatedSushi = int256(user.amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION);
-        uint256 _pendingSushi = accumulatedSushi.sub(user.rewardDebt).toUInt256();
+        int256 accumulatedSushi = int256(user.amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION);
+        uint256 _pendingSushi = uint256(accumulatedSushi-(user.rewardDebt));
 
         // Effects
-        user.rewardDebt = accumulatedSushi.sub(int256(amount.mul(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
-        user.amount = user.amount.sub(amount);
+        user.rewardDebt = accumulatedSushi-(int256(amount*(pool.accSushiPerShare) / ACC_SUSHI_PRECISION));
+        user.amount = user.amount-(amount);
 
         // Interactions
         SUSHI.safeTransfer(to, _pendingSushi);
